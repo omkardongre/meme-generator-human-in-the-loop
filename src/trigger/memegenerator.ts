@@ -1,6 +1,6 @@
 import { logger, task, wait } from "@trigger.dev/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import * as https from "https";
+import axios from "axios";
 import { uploadToUploadThing } from "./uploadthing";
 
 // Define the ApprovalToken type
@@ -155,9 +155,7 @@ export async function sendSlackApprovalMessage({
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*Meme Variants:*
-1. ${generatedImageUrl1}
-2. ${generatedImageUrl2}`,
+          text: `*Meme Variants:*\n1. ${generatedImageUrl1}\n2. ${generatedImageUrl2}`,
         },
       },
       {
@@ -193,66 +191,30 @@ export async function sendSlackApprovalMessage({
   };
 
   try {
-    const parsedUrl = new URL(webHookUrl);
-    const options = {
-      hostname: parsedUrl.hostname,
-      port: 443,
-      path: parsedUrl.pathname + parsedUrl.search,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(JSON.stringify(message)),
-      },
-    };
-
-    logger.log("Making HTTPS request to Slack", {
-      options,
+    logger.log("Making HTTPS request to Slack using axios", {
+      webhookUrl: webHookUrl,
       messageLength: Buffer.byteLength(JSON.stringify(message)),
     });
 
-    const req = https.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
-      res.on("end", () => {
-        logger.log("Slack response received", {
-          statusCode: res.statusCode,
-          statusMessage: res.statusMessage,
-          response: data,
-        });
-
-        if (res.statusCode !== 200) {
-          throw new Error(
-            `Failed to send Slack notification: ${res.statusCode} - ${res.statusMessage}`
-          );
-        }
-      });
+    const response = await axios.post(webHookUrl, message, {
+      headers: { "Content-Type": "application/json" },
+      timeout: 300000 // 5 minutes
     });
 
-    req.on("error", (error) => {
-      logger.error("HTTPS request error", {
-        error,
-        errorType: error.name,
-        errorMessage: error.message,
-        sentPayload: message,
-      });
-      throw error;
+    logger.log("Slack response received", {
+      statusCode: response.status,
+      statusMessage: response.statusText,
+      response: response.data,
     });
 
-    req.on("socket", (socket) => {
-      socket.setTimeout(30000);
-      socket.on("timeout", () => {
-        logger.error("HTTPS request timeout");
-        req.abort();
-      });
-    });
-
-    req.write(JSON.stringify(message));
-    req.end();
-  } catch (error) {
+    if (response.status !== 200) {
+      throw new Error(
+        `Failed to send Slack notification: ${response.status} - ${response.statusText}`
+      );
+    }
+  } catch (error: any) {
     logger.error("Error sending Slack notification", {
-      error,
+      error: error?.message || error,
       sentPayload: message,
     });
     throw error;
