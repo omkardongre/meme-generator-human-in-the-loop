@@ -1,6 +1,7 @@
 import { logger, task, wait } from "@trigger.dev/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import axios from "axios";
+import { Context } from "@trigger.dev/sdk";
 import { uploadToUploadThing } from "./uploadthing";
 
 // Define the ApprovalToken type
@@ -15,7 +16,16 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 export const generateMeme = task({
   id: "meme-generator",
   maxDuration: 600,
-  run: async (payload: { prompt: string }) => {
+  queue: {
+    name: "per-user-meme-queue", // any name
+    concurrencyLimit: 1, // limit to 1
+  },
+  run: async (payload: { prompt: string }, { ctx }: { ctx: Context }) => {
+    // log context values
+    logger.log("Context values", {
+      ctx: ctx,
+      concurrencyKey: (ctx as any).concurrencyKey ?? "not available",
+    });
     const token = await wait.createToken({ timeout: "10m" });
 
     const generatedMemes = await generateSingleMeme.batchTriggerAndWait([
@@ -105,7 +115,10 @@ export const generateSingleMeme = task({
     // Convert base64 to buffer
     const imageBuffer = Buffer.from(imagePart.inlineData.data, "base64");
     // Upload to UploadThing
-    const imageUrl = await uploadToUploadThing(imageBuffer, `meme-${Date.now()}.png`);
+    const imageUrl = await uploadToUploadThing(
+      imageBuffer,
+      `meme-${Date.now()}.png`
+    );
 
     return {
       imageUrl,
@@ -198,7 +211,7 @@ export async function sendSlackApprovalMessage({
 
     const response = await axios.post(webHookUrl, message, {
       headers: { "Content-Type": "application/json" },
-      timeout: 300000 // 5 minutes
+      timeout: 120000, // 2 minutes
     });
 
     logger.log("Slack response received", {

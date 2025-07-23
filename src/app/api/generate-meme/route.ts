@@ -12,7 +12,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Trigger the workflow
-    const result = await generateMeme.trigger({ prompt });
+    const result = await generateMeme.trigger(
+      { prompt },
+      { concurrencyKey: "omkarkey" }
+    );
+
+    const result2 = await generateMeme.trigger(
+      { prompt },
+      { concurrencyKey: "omkarkey" }
+    );
+    const result3 = await generateMeme.trigger(
+      { prompt },
+      { concurrencyKey: "omkarkey" }
+    );
+
+    console.log("result  = ", result);
+    console.log("result2 = ", result2);
+    console.log("result3 = ", result3);
     return NextResponse.json({ success: true, runId: result.id, ...result });
   } catch (error: any) {
     return NextResponse.json(
