@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Image from "next/image";
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
@@ -12,8 +13,8 @@ export default function Home() {
     approved: boolean;
   }>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setLoading(true);
     setError(null);
     setResult(null);
@@ -40,8 +41,8 @@ export default function Home() {
       }
       if (!pollResult) throw new Error("Timeout waiting for meme generation");
       setResult(pollResult);
-    } catch (err: any) {
-      setError(err.message || "Unknown error");
+    } catch (err: unknown) {
+      setError(String(err));
     } finally {
       setLoading(false);
     }
@@ -73,12 +74,12 @@ export default function Home() {
           <h2 className="text-xl font-semibold mb-2">Generated Memes</h2>
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
             <div>
-              <img src={result.generatedImageUrl1} alt="Meme Variant 1" className="max-w-xs rounded shadow" />
+              <Image src={result.generatedImageUrl1} alt="Meme Variant 1" width={400} height={400} className="max-w-xs rounded shadow" />
               <div className="mt-2">Variant 1</div>
               {result.selectedVariant === 1 && result.approved && <span className="text-green-600 font-bold">Approved</span>}
             </div>
             <div>
-              <img src={result.generatedImageUrl2} alt="Meme Variant 2" className="max-w-xs rounded shadow" />
+              <Image src={result.generatedImageUrl2} alt="Meme Variant 2" width={400} height={400} className="max-w-xs rounded shadow" />
               <div className="mt-2">Variant 2</div>
               {result.selectedVariant === 2 && result.approved && <span className="text-green-600 font-bold">Approved</span>}
             </div>

@@ -7,12 +7,12 @@ export default async function ApprovalPage({
   params,
   searchParams,
 }: {
-  params: { slug: string };
-  searchParams: { variant?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ variant?: string }>;
 }) {
   // Await the params and searchParams objects
-  const paramsData = await Promise.resolve(params);
-  const searchParamsData = await Promise.resolve(searchParams);
+  const paramsData = await params;
+  const searchParamsData = await searchParams;
 
   const tokenId = paramsData.slug;
   const variant = Number(searchParamsData?.variant || 1);

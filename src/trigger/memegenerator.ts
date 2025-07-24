@@ -1,5 +1,5 @@
 import { logger, task, wait } from "@trigger.dev/sdk";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import axios from "axios";
 import { Context } from "@trigger.dev/sdk";
 import { uploadToUploadThing } from "./uploadthing";
@@ -9,8 +9,10 @@ type ApprovalToken = {
   memeVariant: 1 | 2;
 };
 
-// Create Gemini client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Create Gemini client using the new @google/genai package
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY as string,
+});
 
 // Main meme generator task
 export const generateMeme = task({
@@ -24,8 +26,10 @@ export const generateMeme = task({
     // log context values
     logger.log("Context values", {
       ctx: ctx,
-      concurrencyKey: (ctx as any).concurrencyKey ?? "not available",
+      concurrencyKey:
+        (ctx as Record<string, unknown>).concurrencyKey ?? "not available",
     });
+
     const token = await wait.createToken({ timeout: "10m" });
 
     const generatedMemes = await generateSingleMeme.batchTriggerAndWait([
@@ -80,49 +84,57 @@ export const generateMeme = task({
   },
 });
 
-// Subtask for generating a single meme image
+// Subtask for generating a single meme image using the new @google/genai package
 export const generateSingleMeme = task({
   id: "generate-single-meme",
   run: async (payload: { prompt: string }) => {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-preview-image-generation",
-      generationConfig: {
-        responseModalities: ["TEXT", "IMAGE"],
-      },
-    });
-
-    const response = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `Generate an image for the following prompt: ${payload.prompt}`,
-            },
-          ],
+    try {
+      // Use the newer @google/genai package approach
+      const response = await genAI.models.generateContent({
+        model: "gemini-2.0-flash-preview-image-generation",
+        contents: `Generate a meme image for the following prompt: ${payload.prompt}`,
+        config: {
+          responseModalities: [Modality.TEXT, Modality.IMAGE],
         },
-      ],
-    });
+      });
 
-    const imagePart = response.response?.candidates?.[0]?.content?.parts?.find(
-      (p: any) => p.inlineData?.mimeType?.startsWith("image/")
-    );
+      // Find the image part in the response
+      // Define the expected type for a content part
+      type GeminiContentPart = {
+        inlineData?: {
+          mimeType?: string;
+          data?: string;
+        };
+      };
+      const imagePart = response.candidates?.[0]?.content?.parts?.find(
+        (part: GeminiContentPart) => part.inlineData?.mimeType?.startsWith("image/")
+      );
 
-    if (!imagePart?.inlineData?.data) {
-      throw new Error("Failed to generate meme image");
+      if (!imagePart?.inlineData?.data) {
+        throw new Error(
+          "Failed to generate meme image - no image data found in response"
+        );
+      }
+
+      // Convert base64 to buffer
+      const imageBuffer = Buffer.from(imagePart.inlineData.data, "base64");
+
+      // Upload to UploadThing
+      const imageUrl = await uploadToUploadThing(
+        imageBuffer,
+        `meme-${Date.now()}.png`
+      );
+
+      return {
+        imageUrl,
+      };
+    } catch (error) {
+      logger.error("Error generating meme image", {
+        error: (error as Error)?.message || error,
+        prompt: payload.prompt,
+      });
+      throw error;
     }
-
-    // Convert base64 to buffer
-    const imageBuffer = Buffer.from(imagePart.inlineData.data, "base64");
-    // Upload to UploadThing
-    const imageUrl = await uploadToUploadThing(
-      imageBuffer,
-      `meme-${Date.now()}.png`
-    );
-
-    return {
-      imageUrl,
-    };
   },
 });
 
@@ -144,7 +156,7 @@ export async function sendSlackApprovalMessage({
   if (!webHookUrl) throw new Error("SLACK_WEBHOOK_URL is not set");
 
   const message = {
-    text: `Choose the funniest meme`,
+    text: "Choose the funniest meme",
     blocks: [
       {
         type: "header",
@@ -225,9 +237,9 @@ export async function sendSlackApprovalMessage({
         `Failed to send Slack notification: ${response.status} - ${response.statusText}`
       );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Error sending Slack notification", {
-      error: error?.message || error,
+      error: (error as Error)?.message || error,
       sentPayload: message,
     });
     throw error;

@@ -30,9 +30,9 @@ export async function POST(req: NextRequest) {
     console.log("result2 = ", result2);
     console.log("result3 = ", result3);
     return NextResponse.json({ success: true, runId: result.id, ...result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message || "Unknown error" },
+      { error: (error as Error).message || "Unknown error" },
       { status: 500 }
     );
   }
