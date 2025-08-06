@@ -1,7 +1,6 @@
 import { logger, task, wait } from "@trigger.dev/sdk";
 import { GoogleGenAI, Modality } from "@google/genai";
 import axios from "axios";
-import { Context } from "@trigger.dev/sdk";
 import { uploadToUploadThing } from "./uploadthing";
 
 // Define the ApprovalToken type
@@ -22,12 +21,15 @@ export const generateMeme = task({
     name: "per-user-meme-queue", // any name
     concurrencyLimit: 1, // limit to 1
   },
-  run: async (payload: { prompt: string }, { ctx }: { ctx: Context }) => {
+  run: async (payload: { prompt: string }, { ctx }) => {
     // log context values
     logger.log("Context values", {
       ctx: ctx,
-      concurrencyKey:
-        (ctx as Record<string, unknown>).concurrencyKey ?? "not available",
+    });
+
+    // log ctx.concurrencyKey
+    logger.log("Concurrency key", {
+      concurrencyKey: ctx.concurrencyKey,
     });
 
     const token = await wait.createToken({ timeout: "10m" });
@@ -107,7 +109,8 @@ export const generateSingleMeme = task({
         };
       };
       const imagePart = response.candidates?.[0]?.content?.parts?.find(
-        (part: GeminiContentPart) => part.inlineData?.mimeType?.startsWith("image/")
+        (part: GeminiContentPart) =>
+          part.inlineData?.mimeType?.startsWith("image/")
       );
 
       if (!imagePart?.inlineData?.data) {
